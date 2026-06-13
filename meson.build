@@ -28,6 +28,12 @@ install_data(
     install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
 )
 
+install_subdir(
+    'Singularity',
+    install_dir: get_option('datadir') / 'icons',
+    strip_directory: false,
+)
+
 install_data(
     'services/singularity-polkit-agent.service',
     'services/xdg-desktop-portal-fix.service',
