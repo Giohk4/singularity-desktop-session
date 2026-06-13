@@ -1,0 +1,23 @@
+#!/bin/bash
+
+
+# detect gpu and disable hardware cursor if inisde a VM
+for drv in /sys/class/drm/card[0-9]*/device/driver; do
+    [ -e "$drv" ] || continue
+    case "$(basename "$(readlink -f "$drv")")" in
+        virtio*|qxl|vmwgfx|bochs-drm|cirrus|vboxvideo|simpledrm)
+            export WLR_NO_HARDWARE_CURSORS="${WLR_NO_HARDWARE_CURSORS:-1}"
+            break ;;
+    esac
+done
+
+
+export SINGULARITY_BLUR_ENABLED=1
+
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+
+# launch with journald logging
+# to check logs just run "journalctl -t labwc"
+
+exec /usr/bin/labwc -S /usr/bin/singularity-session 2>&1 | logger -t labwc

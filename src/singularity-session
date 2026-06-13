@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# prevent a second session from starting
+_LOCK="${XDG_RUNTIME_DIR:-/run/user/$UID}/singularity-desktop-session.lock"
+exec 9>"$_LOCK"
+flock -n 9 || { logger -t singularity-session "session already running, refusing to start"; exit 1; }
+
+
+export GDK_BACKEND=wayland
+export GSK_RENDERER=gl
+export QT_QPA_PLATFORMTHEME=xdgdesktopportal
+export XDG_CURRENT_DESKTOP=Singularity
+
+
+dbus-update-activation-environment --systemd \
+    DISPLAY WAYLAND_DISPLAY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
+    XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS GDK_BACKEND GSK_RENDERER \
+    XDG_DATA_DIRS QT_QPA_PLATFORMTHEME \
+    > /dev/null 2>&1 || logger -t singularity-session "dbus failed to update envirnoment variables"
+
+systemctl --user set-environment \
+    XDG_CURRENT_DESKTOP="$XDG_CURRENT_DESKTOP" \
+    QT_QPA_PLATFORMTHEME="$QT_QPA_PLATFORMTHEME" \
+    XDG_DATA_DIRS="$XDG_DATA_DIRS" \
+    > /dev/null 2>&1 || logger -t singularity-session "systemd failed to import session environment variables"
+
+systemctl --user restart xdg-desktop-portal > /dev/null 2>&1 || logger -t singularity-session "xdg desktop portal startup failed"
+
+#systemctl --user start singularity-session.target > /dev/null 2>&1 || logger -t singularity-session "singularity session target startup failed"
+
+systemctl --user start xdg-desktop-portal-singularity.service > /dev/null 2>&1 || logger -t singularity-session "singularity desktop portal startup failed"
+
+systemctl --user start singularity-polkit-agent.service > /dev/null 2>&1 || logger -t singularity-session "singularity polkit agent startup failed"
+
+
+
+
+# logging with journald
+
+exec > >(logger -t singularity-session) 2>&1
+
+
+# cleanup in case of crash
+
+cleanup() {
+    if [[ -n "${child_pid:-}" ]]; then
+        kill -TERM "$child_pid" 2>/dev/null || true
+        wait "$child_pid" 2>/dev/null || true
+    fi
+    exit 143
+}
+
+trap cleanup TERM INT
+
+# main loop
+
+
+MAX_FAILS=3
+FAILS=0
+BACKOFF=2
+MAX_BACKOFF=30
+STABLE_AFTER=20
+
+while true; do
+    start_ts=$(date +%s)
+
+
+    stdbuf -oL -eL singularity-desktop &
+    child_pid=$!
+    wait "$child_pid"
+    ec=$?
+
+    end_ts=$(date +%s)
+    runtime=$((end_ts - start_ts))
+
+    if [ "$ec" -eq 0 ]; then
+        echo "singularity-desktop exited 0, stopping"
+        exit 0
+    fi
+
+    if [ "$runtime" -ge "$STABLE_AFTER" ]; then
+        FAILS=0
+        BACKOFF=2
+    else
+        FAILS=$((FAILS + 1))
+    fi
+
+    echo "singularity-desktop exited $ec after ${runtime}s (fail $FAILS/$MAX_FAILS)"
+
+    if [ "$FAILS" -ge "$MAX_FAILS" ]; then
+        echo "too many consecutive failures, giving up"
+        exit 1
+    fi
+
+    echo "restarting in ${BACKOFF}s..."
+    sleep "$BACKOFF"
+
+    if [ "$BACKOFF" -lt "$MAX_BACKOFF" ]; then
+        BACKOFF=$((BACKOFF * 2))
+        if [ "$BACKOFF" -gt "$MAX_BACKOFF" ]; then
+            BACKOFF=$MAX_BACKOFF
+        fi
+    fi
+done

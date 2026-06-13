@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Singularity
+Comment=Login into Singularity-desktop
+Exec=singularity-start
+Type=Application
+DesktopNames=singularity
