@@ -36,7 +36,7 @@ install_subdir(
 
 install_data(
     'services/singularity-polkit-agent.service',
-    'services/xdg-desktop-portal-fix.service',
+    'services/singularity-session.target',
     'services/xdg-desktop-portal-singularity.service',
     install_dir: get_option('prefix') / 'lib' / 'systemd' / 'user',
 )

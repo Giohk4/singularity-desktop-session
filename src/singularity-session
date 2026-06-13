@@ -24,9 +24,9 @@ systemctl --user set-environment \
     XDG_DATA_DIRS="$XDG_DATA_DIRS" \
     > /dev/null 2>&1 || logger -t singularity-session "systemd failed to import session environment variables"
 
-systemctl --user restart xdg-desktop-portal-fix.service > /dev/null 2>&1 || logger -t singularity-session "xdg desktop portal startup failed"
+systemctl --user start singularity-session.target > /dev/null 2>&1 || logger -t singularity-session "singularity session target startup failed"
 
-#systemctl --user start singularity-session.target > /dev/null 2>&1 || logger -t singularity-session "singularity session target startup failed"
+systemctl --user restart xdg-desktop-portal.service > /dev/null 2>&1 || logger -t singularity-session "xdg desktop portal startup failed"
 
 systemctl --user start xdg-desktop-portal-singularity.service > /dev/null 2>&1 || logger -t singularity-session "singularity desktop portal startup failed"
 
